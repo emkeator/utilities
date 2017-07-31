@@ -135,11 +135,13 @@ var _ = { };
     
     for (let i = 0; i < list.length; i++){
       
-      //this works for 'invoke with function reference...
-      newList.push(methodName.call(list[i], args));
-
-      //this works for 'invoke'...
-      // newList.push(list[i][methodName](args));
+      if(typeof (methodName) === 'string') {
+        //this works for 'invoke'...when methodName is passed as a string
+        newList.push(list[i][methodName](args));
+      } else {
+        //this works for 'invoke with function reference'...when it's an array.prototype.methodName
+        newList.push(methodName.call(list[i], args));
+      }
       
     }
     return newList;
@@ -150,6 +152,7 @@ var _ = { };
   // iterator(previousValue, item) for each item. previousValue should be
   // the return value of the previous iterator call.
   _.reduce = function(collection, iterator, initialValue) {
+    
     if(initialValue) {
       var prevVal = initialValue;
     } else {
@@ -228,21 +231,47 @@ var _ = { };
   // Extend a given object with all the properties of the passed in
   // object(s).
   _.extend = function(obj) {
-    growingObj = this;
-    for (let prop in obj) {
-      var key = prop;
-      var value = obj[prop];
-      console.log(key, value);
-      growingObj[key] = value;
-      console.log(this[key]);
+    //I know I could simplify this code down but it's so nice and readable like this
+    //so I'm keeping it!
+    let growingObj = arguments[0];
+    let otherArgs = Array.from(arguments);
+    otherArgs.shift();
+    
+    for (let i = 0; i < otherArgs.length; i++) {
+      let curObj = otherArgs[i];
       
+      for (let prop in curObj) {
+        let key = prop;
+        let value = curObj[prop];
+        growingObj[key] = value;
+      }
     }
+  
+    return growingObj;
     
   };
 
   // Like extend, but doesn't ever overwrite a key that already
   // exists in obj
   _.defaults = function(obj) {
+    let growingObj = arguments[0];
+    let otherArgs = Array.from(arguments);
+    otherArgs.shift();
+    
+    for (let i = 0; i < otherArgs.length; i++) {
+      let curObj = otherArgs[i];
+      
+      for (let prop in curObj) {
+        let key = prop;
+        let value = curObj[prop];
+        if (!growingObj.hasOwnProperty(key)) {
+          growingObj[key] = value;
+        }
+      }
+    }
+  
+    return growingObj;
+    
   };
 
 
@@ -254,6 +283,16 @@ var _ = { };
   // Return a function that can be called at most one time. Subsequent calls
   // should return the previously returned value.
   _.once = function(func) {
+     let beenCalled = false;
+     let firstAndOnlyVal = func.call();
+
+     return function(func){
+       beenCalled = true;
+       if (beenCalled) {
+        return firstAndOnlyVal;
+       }
+     }
+
   };
 
   // Memoize an expensive function by storing its results. You may assume
@@ -263,7 +302,39 @@ var _ = { };
   // already computed the result for the given argument and return that value
   // instead if possible.
   _.memoize = function(func) {
+
+    //refactored solution for dry code
+    let memo = {};
+
+    return function(singleArg) {
+      
+      if(!memo[singleArg]) {
+        memo[singleArg] = func(singleArg);
+      } 
+      return memo[singleArg];
+
+    };
+
+    //Oringal solution -- slightly messier
+    // let prevVal = [];
+    // let args = [];
+
+    // return function(singleArg) {
+    //   if(args.indexOf(singleArg) !== -1) {
+
+    //     return prevVal[args.indexOf(singleArg)];
+
+    //   } else {
+        
+    //     args.push(singleArg);
+    //     prevVal.push(func(singleArg));
+
+    //     return prevVal[prevVal.length - 1];
+
+    //   }
+    // };
   };
+
 
   // Delays a function for the given number of milliseconds, and then calls
   // it with the arguments supplied.
@@ -272,12 +343,22 @@ var _ = { };
   // parameter. For example _.delay(someFunction, 500, 'a', 'b') will
   // call someFunction('a', 'b') after 500ms
   _.delay = function(func, wait) {
+    var successiveArgs = Array.from(arguments);
+    successiveArgs.shift();
+    successiveArgs.shift();
+    
+    setTimeout(function() { func.apply(null, successiveArgs); }, wait);    
   };
 
 
 
   // Shuffle an array.
   _.shuffle = function(array) {
+    var play52CardPickup = array.slice(0);
+    play52CardPickup.sort(function(a, b){
+      return (a + b < Math.floor(Math.random() * (a + b + 1)) + (1 - a - b));
+    })
+    return play52CardPickup;
   };
 
   // Sort the object's values by a criterion produced by an iterator.
@@ -285,6 +366,20 @@ var _ = { };
   // of that string. For example, _.sortBy(people, 'name') should sort
   // an array of people by their name.
   _.sortBy = function(collection, iterator) {
+    
+    function getSortItem(objectOrValue) {
+      if ( typeof iterator === 'function' ) {
+        return iterator(objectOrValue);
+      } else {
+        return objectOrValue[iterator];
+      }
+    }
+
+    collection.sort(function(a, b) {
+      return getSortItem(a) > getSortItem(b);
+    })
+    
+    return collection;
   };
 
   // Zip together two or more arrays with elements of the same index
@@ -293,21 +388,113 @@ var _ = { };
   // Example:
   // _.zip(['a','b','c','d'], [1,2,3]) returns [['a',1], ['b',2], ['c',3], ['d',undefined]]
   _.zip = function() {
+    
+    var arrays = Array.from(arguments);
+    var longest =[];
+    for (var i = 0; i < arrays.length; i++) {
+      if (arrays[i].length > longest.length) {
+        longest = arrays[i];
+      }
+    }
+
+    var zippedUp = [];
+    for (var i = 0; i < longest.length; i++) {
+      //each array we are taking items from
+      let module = [];
+      for (let j = 0; j < arrays.length; j++) {
+        if(arrays[j][i]) {
+          module.push(arrays[j][i]);
+        } else {
+          module.push(undefined);
+        }
+      }
+      zippedUp.push(module);
+    }
+
+    return zippedUp;
+    
+
+
+
   };
 
   // Takes a multidimensional array and converts it to a one-dimensional array.
   // The new array should contain all elements of the multidimensional array.
   _.flatten = function(nestedArray, result) {
+    
+    function recFlatten(array) {
+      //create a new array to work with
+      var newArr = [];
+      //loop through the array
+      for (let i = 0; i < array.length; i++) {
+        //if it's not an array
+        if (!Array.isArray(array[i])) {
+          //push the object/value into the newArray
+          newArr.push(array[i]);
+        } else {
+          //if it IS an array, concatenate the recursively called & flattened version to newArray
+          newArr = newArr.concat(recFlatten(array[i]));
+          //if an array it'll get passed into this function--if it's one dimension, it'll just 
+          //every item get pushed into the new array, which is returned below. If it's not one dimension,
+          //it'll go through this process on the arrays nested within
+        }
+      }
+      return newArr;
+    }
+   
+    return recFlatten(nestedArray);
   };
 
   // Takes an arbitrary number of arrays and produces an array that contains
   // every item shared between all the passed-in arrays.
   _.intersection = function() {
+    var arrays = Array.from(arguments);
+    
+    var allShared = [];
+    //loop through items of first array
+    for (let i = 0; i < arrays[0].length; i++) {
+      let inAll = true; //default, this item's in all arrays
+      //loop through every other array in arrays
+      for (let j = 0; j < arrays.length; j++) {
+          //if current val is not in one of the arrays, set inAll to false and break
+          if(!arrays[j].includes(arrays[0][i])) {
+            inAll = false;
+            break;
+          }
+      }
+      if (inAll) {
+        allShared.push(arrays[0][i]);
+      }
+
+    }
+    return allShared;
+
+
   };
 
   // Take the difference between one array and a number of other arrays.
   // Only the elements present in just the first array will remain.
   _.difference = function(array) {
+    var arrays = Array.from(arguments);
+    
+    var onlyMe = [];
+    //loop through items of first array
+    for (let i = 0; i < arrays[0].length; i++) {
+      let inJustMe = true; //default, this item's in just the first array
+      //loop through every other array in arrays
+      for (let j = 1; j < arrays.length; j++) {
+          //if current val is in one of the arrays, set inJustMe to false and break
+          if(arrays[j].includes(arrays[0][i])) {
+            inJustMe = false;
+            break;
+          }
+      }
+      if (inJustMe) {
+        onlyMe.push(arrays[0][i]);
+      }
+
+    }
+    return onlyMe;
   };
 
 }).call(this);
